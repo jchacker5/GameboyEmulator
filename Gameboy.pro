@@ -1,7 +1,7 @@
 HEADERS += z80.h
 HEADERS += screen.h
 SOURCES += gameboy.cpp
-SOURCES += z80.cpp
+SOURCES += Z80.cpp
 SOURCES += screen.cpp
 
 QT += core widgets
