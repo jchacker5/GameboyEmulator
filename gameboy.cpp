@@ -1,11 +1,12 @@
 #include <iostream>
 #include <fstream>
-#include <vector>
+//#include <vector>
 #include "Z80.h"
-//#include "screen.h"
-// Global ROM array - Initially hardcoded for testing
-unsigned char rom[] = {0x06, 0x06, 0x3e, 0x00, 0x80, 0x05, 0xc2, 0x04, 0x00, 0x76};
-int romSize = sizeof(rom) / sizeof(rom[0]);
+//include "screen.h"
+
+// Global ROM array - Will be loaded from a file
+unsigned char* rom = nullptr; // Use unsigned char* for binary data
+int romSize = 0;
 
 // Memory access functions
 unsigned char memoryRead(int address) {
@@ -20,12 +21,25 @@ void memoryWrite(int address, unsigned char b) {
 }
 
 int main() {
+    // Load ROM from file
+    std::ifstream romfile("testrom.gb", std::ios::in | std::ios::binary | std::ios::ate);
+    if (!romfile.is_open()) {
+        std::cerr << "Failed to open ROM file." << std::endl;
+        return 1;
+    }
+    std::streampos size = romfile.tellg();
+    rom = new unsigned char[size]; // Allocate memory for the ROM
+    romSize = size;
+
+    romfile.seekg(0, std::ios::beg);
+    romfile.read(reinterpret_cast<char*>(rom), size); // Cast to char* for read function
+    romfile.close();
+
     // Initialize the Z80 CPU with memory access functions
     Z80* z80 = new Z80(memoryRead, memoryWrite);
 
-    // Reset the CPU and set the PC to the beginning of the ROM
+    // Reset the CPU
     z80->reset();
-    z80->PC = 0;
 
     // Execute instructions until the CPU halts
     while(!z80->halted) {
@@ -36,6 +50,6 @@ int main() {
     // Output the final value in register A (expected: 21)
     std::cout << "Final A: " << (int)z80->A << std::endl;
 
-   
+
     return 0;
 }
