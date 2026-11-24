@@ -1,0 +1,8 @@
+build/
+*.o
+.DS_Store
+*.pro.user
+.qtc_clangd/
+# Commercial ROMs are not distributed with this repo
+*.gb
+!assets/testrom.gb
