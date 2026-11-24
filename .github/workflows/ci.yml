@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qt6-base-dev
+      - if: runner.os == 'macOS'
+        run: brew install qt
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt 2>/dev/null || true)"
+          cmake --build build --parallel
+      - name: Run the test ROM and render the snapshot headless
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./build/gameboy --quiet --png frame.png | tee out.txt
+          grep -q "halted, A=21" out.txt
+          test -s frame.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frame-${{ matrix.os }}
+          path: frame.png
