@@ -1,43 +1,26 @@
-/*Defines some qt graphical objects
-Margaret Black, 10/2014*/
+#pragma once
 
-#include <QGraphicsItem>
-#include <QGraphicsScene>
-#include <QGraphicsView>
-#include <QTimer>
+// Qt display derived from the course screen helper (Margaret Black, 10/2014).
+// The window and PNG export share one framebuffer and automatic ownership.
+#include <QImage>
 #include <QWidget>
-#include <QKeyEvent>
-#include <QApplication>
+#include "video.h"
 
-class QGraphicsScene;
-
-
-//A window background that is responsive to mouse clicks
-class ScreenView : public QGraphicsView
-{
-    Q_OBJECT
+class Screen final : public QWidget {
 public:
-    ScreenView(QGraphicsScene*, QWidget*x=  NULL);
+    explicit Screen(QWidget* parent = nullptr);
+    void setFrame(const Frame& frame);
+    bool saveFrame(const char* path) const;
+    const QImage& image() const { return image_; }
+
 protected:
-    void keyPressEvent(QKeyEvent* event);
-    void keyReleaseEvent(QKeyEvent* event);
+    void paintEvent(QPaintEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
+
+private:
+    QImage image_;
 };
 
-//a single grid square
-class Square : public QGraphicsItem
-{
-public:
-    //new Square(3,5) defines a square 3 over and 5 down
-    Square();
-    QRectF boundingRect() const;
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
-    int xpos,ypos,xcoor1,ycoor1,xcoor2,ycoor2;
-    int shade;
-};
-
-int setup(int& argc,char** argv,bool showWindow=true);
-bool saveFrame(const char* path);
-void updateSquare(int,int,int);
 void keydown(int);
 void keyup(int);
-void onFrame();

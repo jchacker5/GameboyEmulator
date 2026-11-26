@@ -31,20 +31,35 @@ Requires CMake 3.20+, a C++17 compiler and Qt 6 (`brew install qt` or `apt insta
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+ctest --test-dir build --output-on-failure
 ./build/gameboy                                   # trace the test ROM, then show the frame in a window
 QT_QPA_PLATFORM=offscreen ./build/gameboy --quiet --png frame.png   # headless: write the frame to a PNG
 ```
 
 Options: `--rom FILE`, `--vram FILE` (a VRAM snapshot), `--png OUT`, `--quiet`. CI builds on Ubuntu
-and macOS, runs the test ROM headless, checks for `A=21` and uploads the rendered frame.
+and macOS, runs the regression suite, checks the test ROM's exact 21-instruction halt with
+`A=21`, and uploads the rendered frame. A ROM that exhausts the one-million-instruction budget
+returns failure and does not export a misleading frame.
+
+The snapshot parser checks byte, tileset, map, scroll and palette ranges before rendering.
+It accepts 8,192 bytes followed by eight background settings and, optionally, the course dump's
+eight sprite-palette values (two four-shade palettes, validated but unused in Part 2). Partial
+records and other trailing data are rejected.
+
+The display uses a single 160x144 `QImage` framebuffer scaled 3x with nearest-neighbour sampling.
+The window and PNG use that same image, avoiding per-pixel rectangle outlines. The application
+and window have automatic lifetime management. Tests compare all framebuffer pixels, the actual
+widget paint output and the exported PNG, and cover signed tile indices, both maps, scroll wrap,
+malformed files, CPU timeouts and CLI error statuses.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/gameboy.cpp` | Emulator front end: ROM loading, memory callbacks, the CPU loop, background rendering, CLI |
+| `src/gameboy.cpp` | Emulator front end: ROM loading, memory callbacks, bounded CPU loop and CLI |
+| `src/video.cpp`, `src/video.h` | Validated snapshot parser and background framebuffer rendering |
 | `src/Z80.cpp`, `src/Z80.h` | The CPU core (instruction decode and execute, flags, interrupts). **Provided by the course.** |
-| `src/screen.cpp`, `src/screen.h` | Qt window and pixel grid. **Provided by the course** (Margaret Black); I added headless PNG export. |
+| `src/screen.cpp`, `src/screen.h` | Qt window and shared image/PNG display, rewritten from Margaret Black's course helper. |
 | `assets/testrom.gb` | The course's test program (the 6+...+1 summation) |
 | `assets/screendump.txt` | A VRAM snapshot: 8,192 bytes followed by tileset, tile map, scroll and palette |
 

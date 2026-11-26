@@ -15,21 +15,11 @@
 
 #include "Z80.h"
 #include "screen.h"
-
-extern QApplication* app;
+#include "video.h"
 
 namespace {
 
 std::vector<unsigned char> rom;
-unsigned char graphicsRAM[8192];
-int palette[4];
-int tileset = 0, tilemap = 0, scrollx = 0, scrolly = 0;
-
-constexpr int kScreenWidth = 160;
-constexpr int kScreenHeight = 144;
-constexpr int kTileMap0 = 0x1800;
-constexpr int kTileMap1 = 0x1C00;
-
 unsigned char memoryRead(int address) {
     if (address >= 0 && static_cast<size_t>(address) < rom.size()) return rom[address];
     return 0;  // unmapped (the memory map is Part 3)
@@ -41,20 +31,7 @@ bool loadRom(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file) return false;
     rom.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    return !rom.empty();
-}
-
-// Snapshot format: 8192 VRAM bytes, then tileset, tilemap, scrollx, scrolly and 4 palette entries.
-bool loadVideoSnapshot(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) return false;
-    for (unsigned char& byte : graphicsRAM) {
-        int n;
-        if (!(file >> n)) return false;
-        byte = static_cast<unsigned char>(n);
-    }
-    return static_cast<bool>(file >> tileset >> tilemap >> scrollx >> scrolly >> palette[0] >> palette[1] >>
-                             palette[2] >> palette[3]);
+    return !file.bad() && !rom.empty();
 }
 
 // Run the ROM until HALT, returning the instruction count.
@@ -66,33 +43,6 @@ long runUntilHalt(Z80& cpu, bool trace, long limit = 1'000'000) {
         if (trace) std::cout << "PC=" << cpu.PC << "  " << cpu.instruction << "  A=" << cpu.A << " B=" << cpu.B << '\n';
     }
     return count;
-}
-
-// Colour (0-3) of one screen pixel from the background layer: scroll, tile map lookup, tile data
-// (signed indices for tileset 0), then the two bit-planes of the tile row, through the palette.
-int backgroundPixel(int screenX, int screenY) {
-    const int x = (screenX + scrollx) & 255;
-    const int y = (screenY + scrolly) & 255;
-    const int mapBase = tilemap == 0 ? kTileMap0 : kTileMap1;
-    int tileIndex = graphicsRAM[mapBase + (y / 8) * 32 + (x / 8)];
-    int tileAddress;
-    if (tileset == 1) {
-        tileAddress = tileIndex * 16;
-    } else {
-        if (tileIndex >= 128) tileIndex -= 256;
-        tileAddress = 0x1000 + tileIndex * 16;
-    }
-    const unsigned char low = graphicsRAM[tileAddress + (y % 8) * 2];
-    const unsigned char high = graphicsRAM[tileAddress + (y % 8) * 2 + 1];
-    const int bit = 7 - (x % 8);
-    const int colourIndex = (((high >> bit) & 1) << 1) | ((low >> bit) & 1);
-    return palette[colourIndex] & 3;
-}
-
-void renderScreen() {
-    for (int y = 0; y < kScreenHeight; ++y)
-        for (int x = 0; x < kScreenWidth; ++x) updateSquare(x, y, backgroundPixel(x, y));
-    onFrame();
 }
 
 }  // namespace
@@ -123,8 +73,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    setup(argc, argv, /*showWindow=*/pngPath.empty());
-
     // Part 1: run the test ROM on the Z80 core.
     if (!loadRom(romPath)) {
         std::cerr << "Cannot read ROM " << romPath << '\n';
@@ -136,20 +84,27 @@ int main(int argc, char** argv) {
     std::cout << "Executed " << executed << " instructions; " << (cpu.halted ? "halted" : "did not halt")
               << ", A=" << cpu.A << '\n';
 
+    if (!cpu.halted) return 1;
+
     // Part 2: render the background layer of a video-memory snapshot.
-    if (!loadVideoSnapshot(vramPath)) {
+    VideoSnapshot snapshot;
+    std::ifstream video(vramPath);
+    if (!readVideoSnapshot(video, snapshot)) {
         std::cerr << "Cannot read video snapshot " << vramPath << '\n';
         return 1;
     }
-    renderScreen();
+    QApplication app(argc, argv);
+    Screen screen;
+    screen.setFrame(renderBackground(snapshot));
 
     if (!pngPath.empty()) {
-        if (!saveFrame(pngPath.c_str())) {
+        if (!screen.saveFrame(pngPath.c_str())) {
             std::cerr << "Cannot write " << pngPath << '\n';
             return 1;
         }
         std::cout << "Wrote " << pngPath << '\n';
         return 0;
     }
-    return app->exec();
+    screen.show();
+    return app.exec();
 }
