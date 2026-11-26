@@ -25,12 +25,14 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt 2>/dev/null || true)"
           cmake --build build --parallel
+      - name: Regression tests (pixels, malformed input and execution failures)
+        run: ctest --test-dir build --output-on-failure
       - name: Run the test ROM and render the snapshot headless
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
           ./build/gameboy --quiet --png frame.png | tee out.txt
-          grep -q "halted, A=21" out.txt
+          grep -q "Executed 21 instructions; halted, A=21" out.txt
           test -s frame.png
       - uses: actions/upload-artifact@v4
         with:
