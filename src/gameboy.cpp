@@ -50,11 +50,14 @@ bool loadVideoSnapshot(const std::string& path) {
     if (!file) return false;
     for (unsigned char& byte : graphicsRAM) {
         int n;
-        if (!(file >> n)) return false;
+        if (!(file >> n) || n < 0 || n > 255) return false;
         byte = static_cast<unsigned char>(n);
     }
-    return static_cast<bool>(file >> tileset >> tilemap >> scrollx >> scrolly >> palette[0] >> palette[1] >>
-                             palette[2] >> palette[3]);
+    if (!(file >> tileset >> tilemap >> scrollx >> scrolly >> palette[0] >> palette[1] >> palette[2] >> palette[3])) return false;
+    if (tileset < 0 || tileset > 1 || tilemap < 0 || tilemap > 1 ||
+        scrollx < 0 || scrollx > 255 || scrolly < 0 || scrolly > 255) return false;
+    for (int shade : palette) if (shade < 0 || shade > 3) return false;
+    return true;
 }
 
 // Run the ROM until HALT, returning the instruction count.
@@ -135,6 +138,8 @@ int main(int argc, char** argv) {
     const long executed = runUntilHalt(cpu, !quiet);
     std::cout << "Executed " << executed << " instructions; " << (cpu.halted ? "halted" : "did not halt")
               << ", A=" << cpu.A << '\n';
+
+    if (!cpu.halted) return 1;
 
     // Part 2: render the background layer of a video-memory snapshot.
     if (!loadVideoSnapshot(vramPath)) {
